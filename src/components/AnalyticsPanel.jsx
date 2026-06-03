@@ -36,7 +36,7 @@ function getBudgetHealth(metrics, projectedMonthlySpend, income) {
   if (metrics.carryForward < 0) {
     return {
       title: "Today is above pace",
-      detail: `${formatCurrency(Math.abs(metrics.carryForward))} over today's max limit.`,
+      detail: `${formatCurrency(Math.abs(metrics.carryForward))} short in carry forward.`,
       tone: "danger",
     };
   }
@@ -49,10 +49,10 @@ function getBudgetHealth(metrics, projectedMonthlySpend, income) {
     };
   }
 
-  if (metrics.carryForward > metrics.dailyBudget) {
+  if (metrics.carryForward > metrics.baseDailyBudget) {
     return {
       title: "Ahead of pace",
-      detail: `${formatCurrency(metrics.carryForward)} left after today's spending.`,
+      detail: `${formatCurrency(metrics.carryForward)} saved in carry forward.`,
       tone: "success",
     };
   }
@@ -331,7 +331,7 @@ function AnalyticsPanel({ income, expenses, currentDay, daysInMonth, metrics }) 
   const totalFunds = Number(income || 0) + metrics.totalSideIncome;
   const health = getBudgetHealth(metrics, analytics.projectedMonthlySpend, income);
   const projectedTone = analytics.projectedMonthlySpend > totalFunds ? "danger" : "success";
-  const highestTone = analytics.highestSpendingDay.amount > metrics.dailyBudget ? "warning" : "neutral";
+  const highestTone = analytics.highestSpendingDay.amount > metrics.baseDailyBudget ? "warning" : "neutral";
   const healthToneClasses = {
     success: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300",
     warning: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300",

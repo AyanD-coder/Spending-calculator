@@ -1,5 +1,3 @@
-import { isToday } from "./dateUtils";
-
 export const EXPENSE_CATEGORIES = [
   "Food",
   "Transport",
@@ -27,6 +25,20 @@ const getDayOfMonth = (isoString) => {
   return Number.isFinite(day) ? day : null;
 };
 
+const buildDailyTotals = (items, daysInMonth) => {
+  const totals = Array.from({ length: daysInMonth }, () => 0);
+
+  items.forEach((item) => {
+    const day = getDayOfMonth(item.createdAt);
+
+    if (day && day >= 1 && day <= daysInMonth) {
+      totals[day - 1] += Number(item.amount) || 0;
+    }
+  });
+
+  return totals;
+};
+
 export const getExpenseCategory = (item) => {
   if (!isExpense(item)) return null;
   return item.category || UNCATEGORIZED;
@@ -45,30 +57,40 @@ export const calculateBudgetMetrics = (income, expenses, currentDay, daysInMonth
 
   const totalSpent = sumAmounts(expenseItems);
   const totalSideIncome = sumAmounts(incomeItems);
-  const spentToday = sumAmounts(expenseItems.filter(item => isToday(item.createdAt)));
-  const sideIncomeToday = sumAmounts(incomeItems.filter(item => isToday(item.createdAt)));
-  const spentBeforeToday = totalSpent - spentToday;
-  const sideIncomeBeforeToday = totalSideIncome - sideIncomeToday;
-
-  const remainingBalance = monthlyIncome + totalSideIncome - totalSpent;
-  const remainingDays = Math.max(1, safeDaysInMonth - safeCurrentDay + 1);
+  const dailyExpenseTotals = buildDailyTotals(expenseItems, safeDaysInMonth);
+  const dailyIncomeTotals = buildDailyTotals(incomeItems, safeDaysInMonth);
   const baseDailyBudget = monthlyIncome / safeDaysInMonth;
-  const dailyBudget = remainingBalance / remainingDays;
-  const previousCarryForward =
-    ((safeCurrentDay - 1) * baseDailyBudget) + sideIncomeBeforeToday - spentBeforeToday;
-  const availableToday = dailyBudget + previousCarryForward;
-  const carryForward = availableToday - spentToday;
-  const maxLimit = dailyBudget + carryForward;
-  const safeSpendingToday = dailyBudget;
+  const spentToday = dailyExpenseTotals[safeCurrentDay - 1] || 0;
+  const sideIncomeToday = dailyIncomeTotals[safeCurrentDay - 1] || 0;
+  const remainingBalance = monthlyIncome + totalSideIncome - totalSpent;
+  const remainingToday = baseDailyBudget - spentToday;
+  const availableToday = baseDailyBudget;
+
+  let previousCarryForward = 0;
+  let carryForward = 0;
+
+  for (let dayIndex = 0; dayIndex < safeCurrentDay; dayIndex += 1) {
+    if (dayIndex === safeCurrentDay - 1) {
+      previousCarryForward = carryForward;
+    }
+
+    const dailySavings = baseDailyBudget - (dailyExpenseTotals[dayIndex] || 0);
+    carryForward += dailySavings + (dailyIncomeTotals[dayIndex] || 0);
+  }
+
+  const maxLimit = remainingToday + carryForward;
+  const safeSpendingToday = remainingToday;
   
   return {
-    dailyBudget: Number(dailyBudget) || 0,
+    baseDailyBudget: Number(baseDailyBudget) || 0,
+    dailyBudget: Number(remainingToday) || 0,
     totalSpent: Number(totalSpent) || 0,
     totalSideIncome: Number(totalSideIncome) || 0,
     spentToday: Number(spentToday) || 0,
     sideIncomeToday: Number(sideIncomeToday) || 0,
     previousCarryForward: Number(previousCarryForward) || 0,
     carryForward: Number(carryForward) || 0,
+    remainingToday: Number(remainingToday) || 0,
     maxLimit: Number(maxLimit) || 0,
     remainingBalance: Number(remainingBalance) || 0,
     savings: Number(carryForward) || 0,

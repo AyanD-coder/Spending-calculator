@@ -35,9 +35,9 @@ function Dashboard({
   const metrics = calculateBudgetMetrics(income, expenses, currentDay, daysInMonth);
   const totalFunds = Number(income || 0) + metrics.totalSideIncome;
   const remainingDays = Math.max(1, daysInMonth - currentDay + 1);
-  const availableTone = getAvailableTone(metrics.maxLimit, metrics.dailyBudget);
-  const carryTone = metrics.carryForward < 0 ? "danger" : metrics.carryForward < metrics.dailyBudget * 0.35 ? "warning" : "success";
-  const balanceTone = metrics.remainingBalance < 0 ? "danger" : metrics.remainingBalance < metrics.dailyBudget * remainingDays * 0.5 ? "warning" : "success";
+  const availableTone = getAvailableTone(metrics.maxLimit, metrics.baseDailyBudget);
+  const carryTone = metrics.carryForward < 0 ? "danger" : metrics.carryForward < metrics.baseDailyBudget * 0.35 ? "warning" : "success";
+  const balanceTone = metrics.remainingBalance < 0 ? "danger" : metrics.remainingBalance < metrics.baseDailyBudget * remainingDays * 0.5 ? "warning" : "success";
 
   return (
     <div className="page-enter space-y-6 sm:space-y-8">
@@ -56,13 +56,13 @@ function Dashboard({
               </span>
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-              Your daily limit is the remaining month balance divided by the days left, then carry forward is added for today.
+              Your daily limit renews from monthly income divided by days in the month. Today's expenses reduce it, while savings stay separate as carry forward.
             </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#1F2937] dark:bg-slate-900/70">
-              <p className="text-xs font-medium text-slate-500 dark:text-[#94A3B8]">Max limit</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-[#94A3B8]">Daily max limit</p>
               <p className={`mt-1 text-lg font-semibold ${availableTone === "danger" ? "text-[#EF4444]" : availableTone === "warning" ? "text-[#F59E0B]" : "text-[#22C55E]"}`}>
                 {formatCurrency(metrics.maxLimit)}
               </p>
@@ -122,11 +122,11 @@ function Dashboard({
               title="Daily Limit"
               value={metrics.dailyBudget}
               icon="limit"
-              subtitle="Income minus expenses, divided by days left"
-              detail={`${remainingDays} days left including today`}
+              subtitle="Remaining from today's daily limit"
+              detail={`Renews at ${formatCurrency(metrics.baseDailyBudget)} each day`}
             />
             <SummaryCard
-              title="Max Limit"
+              title="Daily Max Limit"
               value={metrics.maxLimit}
               icon="available"
               tone={availableTone}
@@ -135,7 +135,7 @@ function Dashboard({
                 tone: availableTone,
               }}
               subtitle="Daily limit plus carry forward"
-              detail={`Carry forward: ${formatCurrency(metrics.carryForward)}`}
+              detail={`Daily limit: ${formatCurrency(metrics.dailyBudget)}; carry: ${formatCurrency(metrics.carryForward)}`}
             />
             <SummaryCard
               title="Total Spent"
@@ -155,8 +155,8 @@ function Dashboard({
                 label: metrics.carryForward < 0 ? "Behind" : "Saved",
                 tone: carryTone,
               }}
-              subtitle="Added to daily limit"
-              detail={`Spent today: ${formatCurrency(metrics.spentToday)}`}
+              subtitle="Carries into tomorrow"
+              detail={`Previous: ${formatCurrency(metrics.previousCarryForward)}; today: ${formatCurrency(metrics.remainingToday + metrics.sideIncomeToday)}`}
             />
             <SummaryCard
               title="Remaining Balance"
