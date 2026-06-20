@@ -50,16 +50,16 @@ export const calculateBudgetMetrics = (income, expenses, currentDay, daysInMonth
   const spentBeforeToday = totalSpent - spentToday;
   const sideIncomeBeforeToday = totalSideIncome - sideIncomeToday;
 
-  const dailyBudget = monthlyIncome / safeDaysInMonth;
-  const previousCarryForward =
-    ((safeCurrentDay - 1) * dailyBudget) + sideIncomeBeforeToday - spentBeforeToday;
-  const availableToday = dailyBudget + previousCarryForward + sideIncomeToday;
-  const carryForward = availableToday - spentToday;
   const remainingBalance = monthlyIncome + totalSideIncome - totalSpent;
-
-  // Safe spending: remaining balance divided by remaining days (including today)
   const remainingDays = Math.max(1, safeDaysInMonth - safeCurrentDay + 1);
-  const safeSpendingToday = remainingBalance / remainingDays;
+  const baseDailyBudget = monthlyIncome / safeDaysInMonth;
+  const dailyBudget = remainingBalance / remainingDays;
+  const previousCarryForward =
+    ((safeCurrentDay - 1) * baseDailyBudget) + sideIncomeBeforeToday - spentBeforeToday;
+  const availableToday = dailyBudget + previousCarryForward;
+  const carryForward = availableToday - spentToday;
+  const maxLimit = dailyBudget + carryForward;
+  const safeSpendingToday = dailyBudget;
   
   return {
     dailyBudget: Number(dailyBudget) || 0,
@@ -69,6 +69,7 @@ export const calculateBudgetMetrics = (income, expenses, currentDay, daysInMonth
     sideIncomeToday: Number(sideIncomeToday) || 0,
     previousCarryForward: Number(previousCarryForward) || 0,
     carryForward: Number(carryForward) || 0,
+    maxLimit: Number(maxLimit) || 0,
     remainingBalance: Number(remainingBalance) || 0,
     savings: Number(carryForward) || 0,
     availableToday: Number(availableToday) || 0,

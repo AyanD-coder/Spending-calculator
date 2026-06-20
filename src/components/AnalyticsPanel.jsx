@@ -36,7 +36,7 @@ function getBudgetHealth(metrics, projectedMonthlySpend, income) {
   if (metrics.carryForward < 0) {
     return {
       title: "Today is above pace",
-      detail: `${formatCurrency(Math.abs(metrics.carryForward))} over today's carry-forward limit.`,
+      detail: `${formatCurrency(Math.abs(metrics.carryForward))} over today's max limit.`,
       tone: "danger",
     };
   }
@@ -52,7 +52,7 @@ function getBudgetHealth(metrics, projectedMonthlySpend, income) {
   if (metrics.carryForward > metrics.dailyBudget) {
     return {
       title: "Ahead of pace",
-      detail: `${formatCurrency(metrics.carryForward)} currently carried forward.`,
+      detail: `${formatCurrency(metrics.carryForward)} left after today's spending.`,
       tone: "success",
     };
   }

@@ -35,7 +35,7 @@ function Dashboard({
   const metrics = calculateBudgetMetrics(income, expenses, currentDay, daysInMonth);
   const totalFunds = Number(income || 0) + metrics.totalSideIncome;
   const remainingDays = Math.max(1, daysInMonth - currentDay + 1);
-  const availableTone = getAvailableTone(metrics.availableToday, metrics.dailyBudget);
+  const availableTone = getAvailableTone(metrics.maxLimit, metrics.dailyBudget);
   const carryTone = metrics.carryForward < 0 ? "danger" : metrics.carryForward < metrics.dailyBudget * 0.35 ? "warning" : "success";
   const balanceTone = metrics.remainingBalance < 0 ? "danger" : metrics.remainingBalance < metrics.dailyBudget * remainingDays * 0.5 ? "warning" : "success";
 
@@ -56,15 +56,15 @@ function Dashboard({
               </span>
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-              Your daily limit is built from monthly income, then unused money carries forward into the next day.
+              Your daily limit is the remaining month balance divided by the days left, then carry forward is added for today.
             </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#1F2937] dark:bg-slate-900/70">
-              <p className="text-xs font-medium text-slate-500 dark:text-[#94A3B8]">Available today</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-[#94A3B8]">Max limit</p>
               <p className={`mt-1 text-lg font-semibold ${availableTone === "danger" ? "text-[#EF4444]" : availableTone === "warning" ? "text-[#F59E0B]" : "text-[#22C55E]"}`}>
-                {formatCurrency(metrics.availableToday)}
+                {formatCurrency(metrics.maxLimit)}
               </p>
             </div>
 
@@ -116,18 +116,18 @@ function Dashboard({
               value={income}
               icon="income"
               subtitle="Monthly planned budget"
-              detail={metrics.totalSideIncome > 0 ? `Side income: ${formatCurrency(metrics.totalSideIncome)}` : "Base for the daily limit"}
+              detail={metrics.totalSideIncome > 0 ? `Side income: ${formatCurrency(metrics.totalSideIncome)}` : "Base income for the month"}
             />
             <SummaryCard
               title="Daily Limit"
               value={metrics.dailyBudget}
               icon="limit"
-              subtitle="Income divided by days in month"
-              detail={`${daysInMonth} days in ${monthName}`}
+              subtitle="Income minus expenses, divided by days left"
+              detail={`${remainingDays} days left including today`}
             />
             <SummaryCard
-              title="Available Today"
-              value={metrics.availableToday}
+              title="Max Limit"
+              value={metrics.maxLimit}
               icon="available"
               tone={availableTone}
               status={{
@@ -135,7 +135,7 @@ function Dashboard({
                 tone: availableTone,
               }}
               subtitle="Daily limit plus carry forward"
-              detail={`Spent today: ${formatCurrency(metrics.spentToday)}`}
+              detail={`Carry forward: ${formatCurrency(metrics.carryForward)}`}
             />
             <SummaryCard
               title="Total Spent"
@@ -155,8 +155,8 @@ function Dashboard({
                 label: metrics.carryForward < 0 ? "Behind" : "Saved",
                 tone: carryTone,
               }}
-              subtitle="Unused daily money rolls into tomorrow"
-              detail="On the last day, this becomes savings"
+              subtitle="Added to daily limit"
+              detail={`Spent today: ${formatCurrency(metrics.spentToday)}`}
             />
             <SummaryCard
               title="Remaining Balance"

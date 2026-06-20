@@ -34,7 +34,7 @@ function IncomeForm({ setIncome, initialValue = "" }) {
           Set your budget
         </h2>
         <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-          Add your monthly income. The app will split it into a daily limit and carry unused money forward each day.
+          Add your monthly income. The app will recalculate your daily limit from the remaining balance and carry unused money forward.
         </p>
       </div>
 
