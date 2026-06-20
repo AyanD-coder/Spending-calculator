@@ -126,7 +126,7 @@ function App() {
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <header className="mb-6 flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <BrandLogo className="h-10 w-10 flex-shrink-0" />
+            <BrandLogo className="h-14 w-16 flex-shrink-0 sm:h-16 sm:w-20" />
             <div className="min-w-0">
               <p className="truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-[#94A3B8]">
                 Spending Calculator

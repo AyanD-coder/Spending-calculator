@@ -26,7 +26,7 @@ function IncomeForm({ setIncome, initialValue = "" }) {
   return (
     <section className="mx-auto mt-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1F2937] dark:bg-[#111827] sm:p-7">
       <div className="mb-7">
-        <BrandLogo className="h-12 w-12" />
+        <BrandLogo className="h-20 w-24" />
         <p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-[#94A3B8]">
           Monthly setup
         </p>

@@ -1,4 +1,4 @@
-function BrandLogo({ className = "h-10 w-10", showWordmark = false }) {
+function BrandLogo({ className = "h-14 w-16", showWordmark = false }) {
   return (
     <span className={`inline-flex items-center gap-3 ${showWordmark ? "" : "justify-center"}`}>
       <img
