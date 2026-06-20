@@ -2,138 +2,129 @@ import { useState } from "react";
 import { EXPENSE_CATEGORIES } from "../utils/budgetCalculator";
 
 function ExpenseForm({ onAddExpense }) {
-  const [type, setType] = useState("expense"); // "expense" | "income"
+  const [type, setType] = useState("expense");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = (event) => {
+    event.preventDefault();
     const parsedAmount = Number(amount);
-    
-    if (!amount || isNaN(parsedAmount)) {
-      setError("Please enter a valid amount.");
+
+    if (!amount || Number.isNaN(parsedAmount)) {
+      setError("Enter a valid amount.");
       return;
     }
+
     if (parsedAmount <= 0) {
       setError("Amount must be greater than zero.");
       return;
     }
-    
+
     setError("");
     onAddExpense({
       id: Date.now(),
       amount: parsedAmount,
-      type, // "expense" or "income"
+      type,
       category: type === "expense" ? category : null,
-      description: description.trim() || (type === "expense" ? "Expense" : "Side Income"),
+      description: description.trim() || (type === "expense" ? "Expense" : "Side income"),
       createdAt: new Date().toISOString(),
     });
-    
+
     setAmount("");
     setDescription("");
   };
 
+  const isExpense = type === "expense";
+
   return (
-    <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-md">
-      {/* Transaction Type Tabs */}
-      <div className="flex bg-gray-100 dark:bg-gray-900 p-1.5 rounded-2xl mb-5 sm:mb-6">
-        <button
-          type="button"
-          onClick={() => {
-            setType("expense");
-            setError("");
-          }}
-          className={`flex-1 py-2 text-xs sm:text-xs font-extrabold rounded-xl transition-all uppercase tracking-wider ${
-            type === "expense"
-              ? "bg-white dark:bg-gray-800 text-rose-600 dark:text-rose-400 shadow-sm"
-              : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
-          }`}
-        >
-          Expense
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setType("income");
-            setError("");
-          }}
-          className={`flex-1 py-2 text-xs sm:text-xs font-extrabold rounded-xl transition-all uppercase tracking-wider ${
-            type === "income"
-              ? "bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 shadow-sm"
-              : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
-          }`}
-        >
-          Side Income
-        </button>
+    <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#1F2937] dark:bg-[#111827] sm:p-6">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-[#94A3B8]">
+            Quick entry
+          </p>
+          <h3 className="mt-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
+            Add transaction
+          </h3>
+        </div>
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-900/70 dark:text-[#94A3B8]">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+          </svg>
+        </div>
       </div>
 
-      <h3 className="text-base sm:text-lg font-black text-gray-900 dark:text-white tracking-tight mb-4 flex items-center gap-2">
-        {type === "expense" ? (
-          <>
-            <span className="p-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 rounded-lg flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 sm:w-4.5 sm:h-4.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-            </span>
-            <span className="truncate">Add Expense</span>
-          </>
-        ) : (
-          <>
-            <span className="p-1.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 sm:w-4.5 sm:h-4.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-            </span>
-            <span className="truncate">Add Side Income</span>
-          </>
-        )}
-      </h3>
+      <div className="mb-5 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-[#1F2937] dark:bg-slate-900/70" aria-label="Transaction type">
+        {[
+          { id: "expense", label: "Expense" },
+          { id: "income", label: "Side income" },
+        ].map((option) => {
+          const selected = type === option.id;
 
-      <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => {
+                setType(option.id);
+                setError("");
+              }}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold transition duration-200 ${
+                selected
+                  ? "bg-white text-slate-950 shadow-sm dark:bg-[#111827] dark:text-white"
+                  : "text-slate-500 hover:text-slate-900 dark:text-[#94A3B8] dark:hover:text-white"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="expense-amount" className="block text-[10px] sm:text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">
-            Amount (₹) *
+          <label htmlFor="expense-amount" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
+            Amount
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-extrabold text-sm">₹</span>
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400 dark:text-slate-500">
+              {"\u20B9"}
+            </span>
             <input
               id="expense-amount"
               type="number"
+              inputMode="decimal"
               min="0.01"
               step="any"
               placeholder="0.00"
-              className={`w-full pl-8 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:bg-white dark:focus:bg-gray-800 transition-all font-bold text-gray-700 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-600 text-sm ${
-                type === "expense" ? "focus:ring-rose-500" : "focus:ring-emerald-500"
-              }`}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-sm font-semibold text-slate-950 transition duration-200 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:border-[#1F2937] dark:bg-slate-900/70 dark:text-white dark:placeholder:text-slate-600 dark:focus:border-slate-600 dark:focus:ring-slate-800"
               value={amount}
-              onChange={(e) => {
-                setAmount(e.target.value);
+              aria-invalid={Boolean(error)}
+              onChange={(event) => {
+                setAmount(event.target.value);
                 if (error) setError("");
               }}
             />
           </div>
           {error && (
-            <p className="text-xs text-rose-500 dark:text-rose-400 font-bold mt-1.5 flex items-center gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 flex-shrink-0">
-                <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
-              </svg>
+            <p className="mt-2 text-sm font-medium text-[#EF4444]">
               {error}
             </p>
           )}
         </div>
 
-        {type === "expense" && (
+        {isExpense && (
           <div>
-            <label htmlFor="expense-category" className="block text-[10px] sm:text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">
+            <label htmlFor="expense-category" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
               Category
             </label>
             <select
               id="expense-category"
-              className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white dark:focus:bg-gray-800 transition-all font-bold text-gray-700 dark:text-gray-200 text-sm"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-950 transition duration-200 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:border-[#1F2937] dark:bg-slate-900/70 dark:text-white dark:focus:border-slate-600 dark:focus:ring-slate-800"
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(event) => setCategory(event.target.value)}
             >
               {EXPENSE_CATEGORIES.map((option) => (
                 <option key={option} value={option}>
@@ -145,33 +136,31 @@ function ExpenseForm({ onAddExpense }) {
         )}
 
         <div>
-          <label htmlFor="expense-desc" className="block text-[10px] sm:text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">
-            Description
+          <label htmlFor="expense-desc" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
+            Notes
           </label>
           <input
             id="expense-desc"
             type="text"
-            placeholder={type === "expense" ? "e.g. Lunch, Coffee, Rent" : "e.g. Freelance, Refund, Gift"}
-            className={`w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:bg-white dark:focus:bg-gray-800 transition-all font-medium text-gray-700 dark:text-gray-300 placeholder-gray-300 dark:placeholder-gray-600 text-sm ${
-              type === "expense" ? "focus:ring-rose-500" : "focus:ring-emerald-500"
-            }`}
+            placeholder={isExpense ? "Lunch, groceries, rent" : "Freelance, refund, gift"}
+            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-950 transition duration-200 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:border-[#1F2937] dark:bg-slate-900/70 dark:text-white dark:placeholder:text-slate-600 dark:focus:border-slate-600 dark:focus:ring-slate-800"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(event) => setDescription(event.target.value)}
           />
         </div>
 
         <button
           type="submit"
-          className={`w-full text-white font-extrabold py-2.5 sm:py-3 rounded-xl transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 text-xs sm:text-sm ${
-            type === "expense"
-              ? "bg-rose-600 hover:bg-rose-700 dark:bg-rose-700 dark:hover:bg-rose-600"
-              : "bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+          className={`mt-2 inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold text-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-[#111827] ${
+            isExpense
+              ? "bg-slate-950 hover:bg-slate-800 focus:ring-slate-400 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+              : "bg-[#16A34A] hover:bg-[#15803D] focus:ring-emerald-400"
           }`}
         >
-          <span>{type === "expense" ? "Log Expense" : "Log Side Income"}</span>
+          {isExpense ? "Save expense" : "Save side income"}
         </button>
       </form>
-    </div>
+    </aside>
   );
 }
 

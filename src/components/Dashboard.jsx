@@ -1,9 +1,24 @@
 import { useState } from "react";
-import SummaryCard from "./SummaryCard";
+import AnalyticsPanel from "./AnalyticsPanel";
 import ExpenseForm from "./ExpenseForm";
 import ExpenseHistory from "./ExpenseHistory";
-import AnalyticsPanel from "./AnalyticsPanel";
+import SummaryCard from "./SummaryCard";
 import { calculateBudgetMetrics } from "../utils/budgetCalculator";
+
+const formatCurrency = (value) => {
+  const amount = Number(value) || 0;
+  const sign = amount < 0 ? "-" : "";
+
+  return `${sign}\u20B9${Math.abs(amount).toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+function getAvailableTone(value, dailyBudget) {
+  if (value < 0) return "danger";
+  if (value < dailyBudget * 0.5) return "warning";
+  return "success";
+}
 
 function Dashboard({
   income,
@@ -18,126 +33,155 @@ function Dashboard({
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const metrics = calculateBudgetMetrics(income, expenses, currentDay, daysInMonth);
+  const totalFunds = Number(income || 0) + metrics.totalSideIncome;
+  const remainingDays = Math.max(1, daysInMonth - currentDay + 1);
+  const availableTone = getAvailableTone(metrics.availableToday, metrics.dailyBudget);
+  const carryTone = metrics.carryForward < 0 ? "danger" : metrics.carryForward < metrics.dailyBudget * 0.35 ? "warning" : "success";
+  const balanceTone = metrics.remainingBalance < 0 ? "danger" : metrics.remainingBalance < metrics.dailyBudget * remainingDays * 0.5 ? "warning" : "success";
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-sm">
-        <div className="flex-1 min-w-0">
-          <h2 className="text-lg sm:text-xl font-black text-gray-800 dark:text-white tracking-tight">
-            Dashboard
-          </h2>
-          <p className="text-xs sm:text-sm text-gray-400 dark:text-gray-500 font-semibold mt-0.5">
-            {monthName} {year} • Day {currentDay} of {daysInMonth}
-          </p>
-        </div>
-        <button
-          onClick={onEditIncome}
-          className="px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-extrabold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all flex items-center gap-1.5 whitespace-nowrap"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-          </svg>
-          Edit Income
-        </button>
-      </div>
+    <div className="page-enter space-y-6 sm:space-y-8">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#1F2937] dark:bg-[#111827] sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-[#94A3B8]">
+              Current month
+            </p>
+            <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2">
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-[#F9FAFB] sm:text-3xl">
+                {monthName} {year}
+              </h2>
+              <span className="mb-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-[#1F2937] dark:bg-slate-900/70 dark:text-[#94A3B8]">
+                Day {currentDay} of {daysInMonth}
+              </span>
+            </div>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
+              Your daily limit is built from monthly income, then unused money carries forward into the next day.
+            </p>
+          </div>
 
-      <div className="flex bg-gray-100 dark:bg-gray-800 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-700 w-full sm:w-fit">
-        <button
-          type="button"
-          onClick={() => setActiveTab("overview")}
-          className={`flex-1 sm:flex-none px-4 py-2 text-xs font-black rounded-xl transition-all uppercase tracking-wider ${
-            activeTab === "overview"
-              ? "bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm"
-              : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-          }`}
-        >
-          Overview
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("analytics")}
-          className={`flex-1 sm:flex-none px-4 py-2 text-xs font-black rounded-xl transition-all uppercase tracking-wider ${
-            activeTab === "analytics"
-              ? "bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm"
-              : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-          }`}
-        >
-          Analytics
-        </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#1F2937] dark:bg-slate-900/70">
+              <p className="text-xs font-medium text-slate-500 dark:text-[#94A3B8]">Available today</p>
+              <p className={`mt-1 text-lg font-semibold ${availableTone === "danger" ? "text-[#EF4444]" : availableTone === "warning" ? "text-[#F59E0B]" : "text-[#22C55E]"}`}>
+                {formatCurrency(metrics.availableToday)}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onEditIncome}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition duration-200 hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-[#1F2937] dark:bg-[#111827] dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m16.8 4.8 2.4 2.4M5 19l4.8-1 9.7-9.7a1.7 1.7 0 0 0 0-2.4l-1.4-1.4a1.7 1.7 0 0 0-2.4 0L6 14.2 5 19Z" />
+              </svg>
+              Edit income
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-[#1F2937] dark:bg-[#111827] sm:w-fit" role="tablist" aria-label="Dashboard sections">
+        {[
+          { id: "overview", label: "Overview" },
+          { id: "analytics", label: "Analytics" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition duration-200 sm:flex-none ${
+                isActive
+                  ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-[#94A3B8] dark:hover:bg-slate-900/70 dark:hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === "overview" ? (
-        <>
-          {/* Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="space-y-6 sm:space-y-8">
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <SummaryCard
               title="Income"
               value={income}
-              type="gray"
+              icon="income"
               subtitle="Monthly planned budget"
+              detail={metrics.totalSideIncome > 0 ? `Side income: ${formatCurrency(metrics.totalSideIncome)}` : "Base for the daily limit"}
             />
             <SummaryCard
               title="Daily Limit"
               value={metrics.dailyBudget}
-              type="gray"
-              subtitle="Income divided by days"
+              icon="limit"
+              subtitle="Income divided by days in month"
+              detail={`${daysInMonth} days in ${monthName}`}
             />
             <SummaryCard
               title="Available Today"
               value={metrics.availableToday}
-              type={metrics.availableToday >= 0 ? "green" : "red"}
-              subtitle="Daily limit + previous carry forward"
-            />
-            <SummaryCard
-              title="Spent Today"
-              value={metrics.spentToday}
-              type={metrics.spentToday > metrics.availableToday ? "red" : "gray"}
-              subtitle="Expenses logged today"
-            />
-            <SummaryCard
-              title="Carry Forward"
-              value={metrics.carryForward}
-              type={metrics.carryForward >= 0 ? "green" : "red"}
-              subtitle="Final day value is savings"
-            />
-            <SummaryCard
-              title="Remaining Balance"
-              value={metrics.remainingBalance}
-              type={metrics.remainingBalance >= 0 ? "green" : "red"}
-              subtitle="Income + side income - total spent"
+              icon="available"
+              tone={availableTone}
+              status={{
+                label: availableTone === "danger" ? "Over" : availableTone === "warning" ? "Tight" : "Ready",
+                tone: availableTone,
+              }}
+              subtitle="Daily limit plus carry forward"
+              detail={`Spent today: ${formatCurrency(metrics.spentToday)}`}
             />
             <SummaryCard
               title="Total Spent"
               value={metrics.totalSpent}
-              type={metrics.totalSpent > income ? "red" : "gray"}
+              icon="spent"
+              tone={metrics.totalSpent > totalFunds ? "danger" : "neutral"}
+              status={metrics.totalSpent > totalFunds ? { label: "Over", tone: "danger" } : null}
               subtitle="Expenses logged this month"
+              detail="Side income is excluded from spending"
             />
-          </div>
+            <SummaryCard
+              title="Carry Forward"
+              value={metrics.carryForward}
+              icon="carry"
+              tone={carryTone}
+              status={{
+                label: metrics.carryForward < 0 ? "Behind" : "Saved",
+                tone: carryTone,
+              }}
+              subtitle="Unused daily money rolls into tomorrow"
+              detail="On the last day, this becomes savings"
+            />
+            <SummaryCard
+              title="Remaining Balance"
+              value={metrics.remainingBalance}
+              icon="balance"
+              tone={balanceTone}
+              status={metrics.remainingBalance < 0 ? { label: "Negative", tone: "danger" } : { label: "Healthy", tone: balanceTone }}
+              subtitle="Income plus side income minus expenses"
+              detail={`${remainingDays} days left including today`}
+            />
+          </section>
 
-          {/* Forms & History Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 sm:gap-6">
-            <div className="md:col-span-2">
-              <ExpenseForm onAddExpense={onAddExpense} />
-            </div>
-            <div className="md:col-span-3">
-              <ExpenseHistory
-                expenses={expenses}
-                onDeleteExpense={onDeleteExpense}
-              />
-            </div>
-          </div>
-        </>
-      ) : (
-        <div>
-          <AnalyticsPanel
-            income={income}
-            expenses={expenses}
-            currentDay={currentDay}
-            daysInMonth={daysInMonth}
-            metrics={metrics}
-          />
+          <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(300px,380px)_1fr]">
+            <ExpenseForm onAddExpense={onAddExpense} />
+            <ExpenseHistory expenses={expenses} onDeleteExpense={onDeleteExpense} />
+          </section>
         </div>
+      ) : (
+        <AnalyticsPanel
+          income={income}
+          expenses={expenses}
+          currentDay={currentDay}
+          daysInMonth={daysInMonth}
+          metrics={metrics}
+        />
       )}
     </div>
   );
