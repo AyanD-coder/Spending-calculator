@@ -100,3 +100,23 @@ test("final-day carry-forward equals savings and remaining balance", () => {
   assert.equal(metrics.savings, 5775);
   assert.equal(metrics.remainingToday, 200);
 });
+
+test("uses previous month remaining balance before salary is added", () => {
+  const metrics = calculateBudgetMetrics(0, [], 1, 30, 3000);
+
+  assert.equal(metrics.openingBalance, 3000);
+  assert.equal(metrics.monthlyFunds, 3000);
+  assert.equal(metrics.baseDailyBudget, 100);
+  assert.equal(metrics.remainingBalance, 3000);
+  assert.equal(metrics.remainingToday, 100);
+});
+
+test("adds salary on top of previous month remaining balance", () => {
+  const metrics = calculateBudgetMetrics(30000, [], 1, 30, 3000);
+
+  assert.equal(metrics.openingBalance, 3000);
+  assert.equal(metrics.monthlyIncome, 30000);
+  assert.equal(metrics.monthlyFunds, 33000);
+  assert.equal(metrics.baseDailyBudget, 1100);
+  assert.equal(metrics.remainingBalance, 33000);
+});

@@ -44,13 +44,15 @@ export const getExpenseCategory = (item) => {
   return item.category || UNCATEGORIZED;
 };
 
-export const calculateBudgetMetrics = (income, expenses, currentDay, daysInMonth) => {
+export const calculateBudgetMetrics = (income, expenses, currentDay, daysInMonth, openingBalance = 0) => {
   const safeDaysInMonth = Math.max(1, Number(daysInMonth) || 1);
   const safeCurrentDay = Math.min(
     Math.max(1, Number(currentDay) || 1),
     safeDaysInMonth
   );
   const monthlyIncome = Number(income) || 0;
+  const startingBalance = Number(openingBalance) || 0;
+  const monthlyFunds = startingBalance + monthlyIncome;
 
   const expenseItems = expenses.filter(isExpense);
   const incomeItems = expenses.filter(item => item.type === "income");
@@ -59,10 +61,10 @@ export const calculateBudgetMetrics = (income, expenses, currentDay, daysInMonth
   const totalSideIncome = sumAmounts(incomeItems);
   const dailyExpenseTotals = buildDailyTotals(expenseItems, safeDaysInMonth);
   const dailyIncomeTotals = buildDailyTotals(incomeItems, safeDaysInMonth);
-  const baseDailyBudget = monthlyIncome / safeDaysInMonth;
+  const baseDailyBudget = monthlyFunds / safeDaysInMonth;
   const spentToday = dailyExpenseTotals[safeCurrentDay - 1] || 0;
   const sideIncomeToday = dailyIncomeTotals[safeCurrentDay - 1] || 0;
-  const remainingBalance = monthlyIncome + totalSideIncome - totalSpent;
+  const remainingBalance = monthlyFunds + totalSideIncome - totalSpent;
   const remainingToday = baseDailyBudget - spentToday;
   const availableToday = baseDailyBudget;
 
@@ -82,6 +84,10 @@ export const calculateBudgetMetrics = (income, expenses, currentDay, daysInMonth
   const safeSpendingToday = remainingToday;
   
   return {
+    openingBalance: Number(startingBalance) || 0,
+    monthlyIncome: Number(monthlyIncome) || 0,
+    monthlyFunds: Number(monthlyFunds) || 0,
+    totalAvailableFunds: Number(monthlyFunds + totalSideIncome) || 0,
     baseDailyBudget: Number(baseDailyBudget) || 0,
     dailyBudget: Number(remainingToday) || 0,
     totalSpent: Number(totalSpent) || 0,

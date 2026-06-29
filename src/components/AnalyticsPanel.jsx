@@ -22,8 +22,8 @@ const categoryColors = [
   "#94A3B8",
 ];
 
-function getBudgetHealth(metrics, projectedMonthlySpend, income) {
-  const projectedLimit = Number(income || 0) + metrics.totalSideIncome;
+function getBudgetHealth(metrics, projectedMonthlySpend) {
+  const projectedLimit = metrics.totalAvailableFunds;
 
   if (metrics.remainingBalance < 0) {
     return {
@@ -325,11 +325,11 @@ function CategoryBreakdown({ items, totalSpent }) {
   );
 }
 
-function AnalyticsPanel({ income, expenses, currentDay, daysInMonth, metrics }) {
+function AnalyticsPanel({ expenses, currentDay, daysInMonth, metrics }) {
   const analytics = calculateAnalyticsMetrics(expenses, currentDay, daysInMonth);
   const hasExpenses = analytics.totalSpent > 0;
-  const totalFunds = Number(income || 0) + metrics.totalSideIncome;
-  const health = getBudgetHealth(metrics, analytics.projectedMonthlySpend, income);
+  const totalFunds = metrics.totalAvailableFunds;
+  const health = getBudgetHealth(metrics, analytics.projectedMonthlySpend);
   const projectedTone = analytics.projectedMonthlySpend > totalFunds ? "danger" : "success";
   const highestTone = analytics.highestSpendingDay.amount > metrics.baseDailyBudget ? "warning" : "neutral";
   const healthToneClasses = {

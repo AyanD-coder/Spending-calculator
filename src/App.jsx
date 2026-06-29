@@ -20,8 +20,18 @@ const monthNames = [
   "December",
 ];
 
+const formatCurrency = (value) => {
+  const amount = Number(value) || 0;
+  const sign = amount < 0 ? "-" : "";
+
+  return `${sign}\u20B9${Math.abs(amount).toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  })}`;
+};
+
 function App() {
   const [income, setIncome] = useLocalStorage("income", 0);
+  const [openingBalance, setOpeningBalance] = useLocalStorage("openingBalance", 0);
   const [expenses, setExpenses] = useLocalStorage("expenses", []);
   const [, setMonthMetadata] = useLocalStorage("monthMetadata", null);
   const [, setArchivedMonths] = useLocalStorage("archivedMonths", []);
@@ -51,19 +61,22 @@ function App() {
         if (parsedMeta.month !== currentMonth || parsedMeta.year !== currentYear) {
           const savedExpenses = JSON.parse(localStorage.getItem("expenses") || "[]");
           const savedIncome = Number(JSON.parse(localStorage.getItem("income") || "0"));
+          const savedOpeningBalance = Number(JSON.parse(localStorage.getItem("openingBalance") || "0"));
           const totalSpent = savedExpenses
             .filter((item) => !item.type || item.type === "expense")
             .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
           const totalSideIncome = savedExpenses
             .filter((item) => item.type === "income")
             .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+          const remainingBalance = savedOpeningBalance + savedIncome + totalSideIncome - totalSpent;
           const archiveEntry = {
             month: parsedMeta.month,
             year: parsedMeta.year,
+            openingBalance: savedOpeningBalance,
             income: savedIncome,
             totalSpent,
             totalSideIncome,
-            remainingBalance: savedIncome + totalSideIncome - totalSpent,
+            remainingBalance,
             expenses: savedExpenses,
             archivedAt: new Date().toISOString(),
           };
@@ -73,10 +86,14 @@ function App() {
 
           localStorage.setItem("archivedMonths", JSON.stringify(nextArchives));
           localStorage.setItem("expenses", JSON.stringify([]));
+          localStorage.setItem("openingBalance", JSON.stringify(remainingBalance));
+          localStorage.setItem("income", JSON.stringify(0));
           localStorage.setItem("monthMetadata", JSON.stringify(newMeta));
 
           setArchivedMonths(nextArchives);
           setExpenses([]);
+          setOpeningBalance(remainingBalance);
+          setIncome(0);
           setMonthMetadata(newMeta);
 
           promptTimerId = window.setTimeout(() => {
@@ -97,7 +114,7 @@ function App() {
         window.clearTimeout(promptTimerId);
       }
     };
-  }, [setArchivedMonths, setExpenses, setMonthMetadata]);
+  }, [setArchivedMonths, setExpenses, setIncome, setMonthMetadata, setOpeningBalance]);
 
   const handleAddExpense = (newExpense) => {
     setExpenses([...expenses, newExpense]);
@@ -112,14 +129,16 @@ function App() {
     setIsEditingIncome(false);
   };
 
-  const handleKeepSameIncome = () => {
+  const handleContinueWithCarryForward = () => {
     setShowMonthChangePrompt(false);
   };
 
-  const handleResetIncome = () => {
-    setIncome(0);
+  const handleAddSalary = () => {
     setShowMonthChangePrompt(false);
+    setIsEditingIncome(true);
   };
+
+  const hasMonthlyFunds = Number(income || 0) !== 0 || Number(openingBalance || 0) !== 0;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950 transition-colors duration-200 dark:bg-[#0B1220] dark:text-[#F9FAFB]">
@@ -160,7 +179,7 @@ function App() {
         </header>
 
         <main className="flex-1">
-          {income === 0 || isEditingIncome ? (
+          {!hasMonthlyFunds || isEditingIncome ? (
             <div className="page-enter">
               {isEditingIncome && (
                 <div className="mx-auto mb-4 flex max-w-md justify-end">
@@ -178,6 +197,7 @@ function App() {
           ) : (
             <Dashboard
               income={income}
+              openingBalance={openingBalance}
               expenses={expenses}
               currentDay={day}
               daysInMonth={daysInMonth}
@@ -204,33 +224,32 @@ function App() {
               Welcome to {monthName}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-              Your previous month's transactions were archived. Choose whether to keep the same income for this month.
+              Your previous month's remaining balance was carried forward. Add salary now if you received it, or continue and add it later.
             </p>
 
             <div className="my-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-[#1F2937] dark:bg-slate-900/60">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-[#94A3B8]">
-                Last month income
+                Opening balance
               </p>
               <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">
-                {"\u20B9"}
-                {income.toLocaleString("en-IN")}
+                {formatCurrency(openingBalance)}
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={handleKeepSameIncome}
+                onClick={handleAddSalary}
                 className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
               >
-                Keep income
+                Add salary
               </button>
               <button
                 type="button"
-                onClick={handleResetIncome}
+                onClick={handleContinueWithCarryForward}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-[#1F2937] dark:bg-[#111827] dark:text-slate-200 dark:hover:bg-slate-800"
               >
-                Change income
+                Continue
               </button>
             </div>
           </div>

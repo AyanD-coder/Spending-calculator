@@ -34,14 +34,14 @@ function IncomeForm({ setIncome, initialValue = "" }) {
           Set your budget
         </h2>
         <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-          Add your monthly income. The app will split it into a fixed daily limit and carry unused money forward.
+          Add your monthly salary. The app will split your carried balance plus salary into a fixed daily limit.
         </p>
       </div>
 
       <form onSubmit={handleSave} className="space-y-5">
         <div>
           <label htmlFor="income-input" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-            Monthly income
+            Monthly salary
           </label>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400 dark:text-slate-500">

@@ -22,6 +22,7 @@ function getAvailableTone(value, dailyBudget) {
 
 function Dashboard({
   income,
+  openingBalance = 0,
   expenses,
   currentDay,
   daysInMonth,
@@ -32,8 +33,8 @@ function Dashboard({
   onEditIncome,
 }) {
   const [activeTab, setActiveTab] = useState("overview");
-  const metrics = calculateBudgetMetrics(income, expenses, currentDay, daysInMonth);
-  const totalFunds = Number(income || 0) + metrics.totalSideIncome;
+  const metrics = calculateBudgetMetrics(income, expenses, currentDay, daysInMonth, openingBalance);
+  const totalFunds = metrics.totalAvailableFunds;
   const remainingDays = Math.max(1, daysInMonth - currentDay + 1);
   const availableTone = getAvailableTone(metrics.maxLimit, metrics.baseDailyBudget);
   const carryTone = metrics.carryForward < 0 ? "danger" : metrics.carryForward < metrics.baseDailyBudget * 0.35 ? "warning" : "success";
@@ -56,7 +57,7 @@ function Dashboard({
               </span>
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-              Your daily limit renews from monthly income divided by days in the month. Today's expenses reduce it, while savings stay separate as carry forward.
+              Your daily limit renews from opening balance plus salary divided by days in the month. Today's expenses reduce it, while savings stay separate as carry forward.
             </p>
           </div>
 
@@ -115,15 +116,15 @@ function Dashboard({
               title="Income"
               value={income}
               icon="income"
-              subtitle="Monthly planned budget"
-              detail={metrics.totalSideIncome > 0 ? `Side income: ${formatCurrency(metrics.totalSideIncome)}` : "Base income for the month"}
+              subtitle="Current month salary"
+              detail={`Opening balance: ${formatCurrency(metrics.openingBalance)}`}
             />
             <SummaryCard
               title="Daily Limit"
               value={metrics.dailyBudget}
               icon="limit"
               subtitle="Remaining from today's daily limit"
-              detail={`Renews at ${formatCurrency(metrics.baseDailyBudget)} each day`}
+              detail={`Based on ${formatCurrency(metrics.monthlyFunds)} across ${daysInMonth} days`}
             />
             <SummaryCard
               title="Daily Max Limit"
@@ -144,7 +145,7 @@ function Dashboard({
               tone={metrics.totalSpent > totalFunds ? "danger" : "neutral"}
               status={metrics.totalSpent > totalFunds ? { label: "Over", tone: "danger" } : null}
               subtitle="Expenses logged this month"
-              detail="Side income is excluded from spending"
+              detail="Side income and opening balance are excluded from spending"
             />
             <SummaryCard
               title="Carry Forward"
@@ -164,7 +165,7 @@ function Dashboard({
               icon="balance"
               tone={balanceTone}
               status={metrics.remainingBalance < 0 ? { label: "Negative", tone: "danger" } : { label: "Healthy", tone: balanceTone }}
-              subtitle="Income plus side income minus expenses"
+              subtitle="Opening balance plus salary and side income minus expenses"
               detail={`${remainingDays} days left including today`}
             />
           </section>
@@ -176,7 +177,6 @@ function Dashboard({
         </div>
       ) : (
         <AnalyticsPanel
-          income={income}
           expenses={expenses}
           currentDay={currentDay}
           daysInMonth={daysInMonth}
