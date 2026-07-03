@@ -24,16 +24,18 @@ function Dashboard({
   income,
   openingBalance = 0,
   expenses,
+  incomeEvents = [],
   currentDay,
   daysInMonth,
   monthName,
   year,
   onAddExpense,
   onDeleteExpense,
+  onAddSalary,
   onEditIncome,
 }) {
   const [activeTab, setActiveTab] = useState("overview");
-  const metrics = calculateBudgetMetrics(income, expenses, currentDay, daysInMonth, openingBalance);
+  const metrics = calculateBudgetMetrics(income, expenses, currentDay, daysInMonth, openingBalance, incomeEvents);
   const totalFunds = metrics.totalAvailableFunds;
   const remainingDays = Math.max(1, daysInMonth - currentDay + 1);
   const availableTone = getAvailableTone(metrics.maxLimit, metrics.baseDailyBudget);
@@ -57,7 +59,7 @@ function Dashboard({
               </span>
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-              Your daily limit renews from opening balance plus salary divided by days in the month. Today's expenses reduce it, while savings stay separate as carry forward.
+              Your daily limit renews from opening balance plus salary divided by days in the month. Added income updates the daily limit from the day it is added, and carry forward is the running total of daily limit minus daily expenses.
             </p>
           </div>
 
@@ -68,6 +70,17 @@ function Dashboard({
                 {formatCurrency(metrics.maxLimit)}
               </p>
             </div>
+
+            <button
+              type="button"
+              onClick={onAddSalary}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition duration-200 hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-[#1F2937] dark:bg-[#111827] dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+              </svg>
+              Add income
+            </button>
 
             <button
               type="button"
@@ -116,8 +129,8 @@ function Dashboard({
               title="Income"
               value={income}
               icon="income"
-              subtitle="Current month salary"
-              detail={`Opening balance: ${formatCurrency(metrics.openingBalance)}`}
+              subtitle="Current month income"
+              detail={`Opening balance: ${formatCurrency(metrics.openingBalance)}; added income: ${formatCurrency(metrics.totalAddedIncome)}`}
             />
             <SummaryCard
               title="Daily Limit"
@@ -144,8 +157,17 @@ function Dashboard({
               icon="spent"
               tone={metrics.totalSpent > totalFunds ? "danger" : "neutral"}
               status={metrics.totalSpent > totalFunds ? { label: "Over", tone: "danger" } : null}
-              subtitle="Expenses logged this month"
-              detail="Side income and opening balance are excluded from spending"
+              subtitle="Daily expenses logged this month"
+              detail={`Major expenses: ${formatCurrency(metrics.totalFixedExpenses)}`}
+            />
+            <SummaryCard
+              title="Major Expenses"
+              value={metrics.totalFixedExpenses}
+              icon="fixed"
+              tone={metrics.totalFixedExpenses > 0 ? "warning" : "neutral"}
+              status={metrics.totalFixedExpenses > 0 ? { label: "Applied", tone: "warning" } : null}
+              subtitle="Monthly costs outside daily spending"
+              detail="Deducts directly from carry forward"
             />
             <SummaryCard
               title="Carry Forward"
@@ -157,7 +179,7 @@ function Dashboard({
                 tone: carryTone,
               }}
               subtitle="Carries into tomorrow"
-              detail={`Previous: ${formatCurrency(metrics.previousCarryForward)}; today: ${formatCurrency(metrics.remainingToday + metrics.sideIncomeToday)}`}
+              detail={`Previous: ${formatCurrency(metrics.previousCarryForward)}; today: ${formatCurrency(metrics.remainingToday)}`}
             />
             <SummaryCard
               title="Remaining Balance"
@@ -165,8 +187,8 @@ function Dashboard({
               icon="balance"
               tone={balanceTone}
               status={metrics.remainingBalance < 0 ? { label: "Negative", tone: "danger" } : { label: "Healthy", tone: balanceTone }}
-              subtitle="Opening balance plus salary and side income minus expenses"
-              detail={`${remainingDays} days left including today`}
+              subtitle="Opening balance plus salary and side income minus all expenses"
+              detail={`${remainingDays} days left; total expenses ${formatCurrency(metrics.totalExpenses)}`}
             />
           </section>
 

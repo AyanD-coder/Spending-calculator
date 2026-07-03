@@ -51,18 +51,23 @@ function ExpenseHistory({ expenses, onDeleteExpense }) {
           <div className="divide-y divide-slate-100 dark:divide-[#1F2937]">
             {sortedExpenses.map((expense) => {
               const isIncome = expense.type === "income";
-              const category = getExpenseCategory(expense);
+              const isFixedExpense = expense.type === "fixedExpense";
+              const category = isFixedExpense ? expense.category || "Major" : getExpenseCategory(expense);
 
               return (
                 <article key={expense.id} className="group flex items-center gap-4 py-3.5">
                   <div className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl ${
                     isIncome
                       ? "bg-emerald-50 text-[#16A34A] dark:bg-emerald-950/30 dark:text-[#22C55E]"
+                      : isFixedExpense
+                        ? "bg-amber-50 text-[#D97706] dark:bg-amber-950/30 dark:text-[#F59E0B]"
                       : "bg-slate-100 text-slate-500 dark:bg-slate-900/70 dark:text-[#94A3B8]"
                   }`}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-[18px] w-[18px]" aria-hidden="true">
                       {isIncome ? (
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M6 11l6-6 6 6" />
+                      ) : isFixedExpense ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 3v3M17 3v3M4.5 9.5h15M6.5 5h11A2.5 2.5 0 0 1 20 7.5v10A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-10A2.5 2.5 0 0 1 6.5 5ZM8 14h8" />
                       ) : (
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M6 13l6 6 6-6" />
                       )}
@@ -72,23 +77,31 @@ function ExpenseHistory({ expenses, onDeleteExpense }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
-                        {expense.description || (isIncome ? "Side income" : "Expense")}
+                        {expense.description || (isIncome ? "Side income" : isFixedExpense ? "Major expense" : "Expense")}
                       </p>
                       {!isIncome && (
-                        <span className="hidden rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500 dark:bg-slate-900/70 dark:text-[#94A3B8] sm:inline-flex">
-                          {category}
+                        <span className={`hidden rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline-flex ${
+                          isFixedExpense
+                            ? "bg-amber-50 text-[#D97706] dark:bg-amber-950/30 dark:text-[#F59E0B]"
+                            : "bg-slate-100 text-slate-500 dark:bg-slate-900/70 dark:text-[#94A3B8]"
+                        }`}>
+                          {isFixedExpense ? `Major / ${category}` : category}
                         </span>
                       )}
                     </div>
                     <p className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-[#94A3B8]">
                       {formatExpenseDate(expense.createdAt)}
-                      {!isIncome ? ` / ${category}` : ""}
+                      {!isIncome ? ` / ${isFixedExpense ? "Major" : category}` : ""}
                     </p>
                   </div>
 
                   <div className="flex flex-shrink-0 items-center gap-2">
                     <p className={`text-sm font-semibold ${
-                      isIncome ? "text-[#16A34A] dark:text-[#22C55E]" : "text-slate-900 dark:text-white"
+                      isIncome
+                        ? "text-[#16A34A] dark:text-[#22C55E]"
+                        : isFixedExpense
+                          ? "text-[#D97706] dark:text-[#F59E0B]"
+                          : "text-slate-900 dark:text-white"
                     }`}>
                       {isIncome ? "+" : "-"}
                       {formatCurrency(expense.amount)}

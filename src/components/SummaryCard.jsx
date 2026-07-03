@@ -11,6 +11,9 @@ const iconPaths = {
   spent: (
     <path strokeLinecap="round" strokeLinejoin="round" d="M5 6.5h14M8 6.5V5a1.5 1.5 0 0 1 1.5-1.5h5A1.5 1.5 0 0 1 16 5v1.5M9 10v6M15 10v6M6.5 6.5l.8 12A2 2 0 0 0 9.3 20h5.4a2 2 0 0 0 2-1.5l.8-12" />
   ),
+  fixed: (
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 3v3M17 3v3M4.5 9.5h15M6.5 5h11A2.5 2.5 0 0 1 20 7.5v10A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-10A2.5 2.5 0 0 1 6.5 5ZM8 14h8" />
+  ),
   carry: (
     <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h7.5A4.5 4.5 0 0 1 19 11.5v0A4.5 4.5 0 0 1 14.5 16H6M9 4 6 7l3 3M15 20l3-3-3-3" />
   ),

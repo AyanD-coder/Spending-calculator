@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { EXPENSE_CATEGORIES } from "../utils/budgetCalculator";
 
+const DEFAULT_FIXED_CATEGORY = "Recharge";
+
 function ExpenseForm({ onAddExpense }) {
   const [type, setType] = useState("expense");
   const [amount, setAmount] = useState("");
@@ -22,13 +24,16 @@ function ExpenseForm({ onAddExpense }) {
       return;
     }
 
+    const isCost = type !== "income";
+    const defaultDescription = type === "income" ? "Side income" : type === "fixedExpense" ? "Major expense" : "Expense";
+
     setError("");
     onAddExpense({
       id: Date.now(),
       amount: parsedAmount,
       type,
-      category: type === "expense" ? category : null,
-      description: description.trim() || (type === "expense" ? "Expense" : "Side income"),
+      category: isCost ? category : null,
+      description: description.trim() || defaultDescription,
       createdAt: new Date().toISOString(),
     });
 
@@ -37,6 +42,8 @@ function ExpenseForm({ onAddExpense }) {
   };
 
   const isExpense = type === "expense";
+  const isFixedExpense = type === "fixedExpense";
+  const isCost = type !== "income";
 
   return (
     <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#1F2937] dark:bg-[#111827] sm:p-6">
@@ -56,10 +63,11 @@ function ExpenseForm({ onAddExpense }) {
         </div>
       </div>
 
-      <div className="mb-5 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-[#1F2937] dark:bg-slate-900/70" aria-label="Transaction type">
+      <div className="mb-5 grid grid-cols-3 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-[#1F2937] dark:bg-slate-900/70" aria-label="Transaction type">
         {[
           { id: "expense", label: "Expense" },
           { id: "income", label: "Side income" },
+          { id: "fixedExpense", label: "Major expense" },
         ].map((option) => {
           const selected = type === option.id;
 
@@ -69,9 +77,14 @@ function ExpenseForm({ onAddExpense }) {
               type="button"
               onClick={() => {
                 setType(option.id);
+                if (option.id === "fixedExpense") {
+                  setCategory(DEFAULT_FIXED_CATEGORY);
+                } else if (option.id === "expense" && type === "fixedExpense") {
+                  setCategory(EXPENSE_CATEGORIES[0]);
+                }
                 setError("");
               }}
-              className={`rounded-lg px-3 py-2 text-sm font-semibold transition duration-200 ${
+              className={`rounded-lg px-2 py-2 text-xs font-semibold transition duration-200 sm:text-sm ${
                 selected
                   ? "bg-white text-slate-950 shadow-sm dark:bg-[#111827] dark:text-white"
                   : "text-slate-500 hover:text-slate-900 dark:text-[#94A3B8] dark:hover:text-white"
@@ -115,7 +128,7 @@ function ExpenseForm({ onAddExpense }) {
           )}
         </div>
 
-        {isExpense && (
+        {isCost && (
           <div>
             <label htmlFor="expense-category" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
               Category
@@ -142,7 +155,7 @@ function ExpenseForm({ onAddExpense }) {
           <input
             id="expense-desc"
             type="text"
-            placeholder={isExpense ? "Lunch, groceries, rent" : "Freelance, refund, gift"}
+            placeholder={isFixedExpense ? "Recharge, rent, subscription" : isExpense ? "Lunch, groceries, rent" : "Freelance, refund, gift"}
             className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-950 transition duration-200 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:border-[#1F2937] dark:bg-slate-900/70 dark:text-white dark:placeholder:text-slate-600 dark:focus:border-slate-600 dark:focus:ring-slate-800"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
@@ -154,10 +167,12 @@ function ExpenseForm({ onAddExpense }) {
           className={`mt-2 inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold text-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-[#111827] ${
             isExpense
               ? "bg-slate-950 hover:bg-slate-800 focus:ring-slate-400 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
-              : "bg-[#16A34A] hover:bg-[#15803D] focus:ring-emerald-400"
+              : isFixedExpense
+                ? "bg-[#D97706] hover:bg-[#B45309] focus:ring-amber-400"
+                : "bg-[#16A34A] hover:bg-[#15803D] focus:ring-emerald-400"
           }`}
         >
-          {isExpense ? "Save expense" : "Save side income"}
+          {isExpense ? "Save expense" : isFixedExpense ? "Save major expense" : "Save side income"}
         </button>
       </form>
     </aside>

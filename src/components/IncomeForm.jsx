@@ -1,9 +1,10 @@
 import { useState } from "react";
 import BrandLogo from "./BrandLogo";
 
-function IncomeForm({ setIncome, initialValue = "" }) {
+function IncomeForm({ setIncome, initialValue = "", mode = "replace", submitLabel = "Continue" }) {
   const [inputIncome, setInputIncome] = useState(initialValue);
   const [error, setError] = useState("");
+  const isAddMode = mode === "add";
 
   const handleSave = (event) => {
     event.preventDefault();
@@ -31,17 +32,19 @@ function IncomeForm({ setIncome, initialValue = "" }) {
           Monthly setup
         </p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
-          Set your budget
+          {isAddMode ? "Add income" : "Set your budget"}
         </h2>
         <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-          Add your monthly salary. The app will split your carried balance plus salary into a fixed daily limit.
+          {isAddMode
+            ? "Add income to this month. It updates the daily limit from today, and only unspent daily limit moves into carry forward."
+            : "Add your monthly salary. The app will split your carried balance plus salary into a fixed daily limit."}
         </p>
       </div>
 
       <form onSubmit={handleSave} className="space-y-5">
         <div>
           <label htmlFor="income-input" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-            Monthly salary
+            {isAddMode ? "Income amount" : "Monthly salary"}
           </label>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400 dark:text-slate-500">
@@ -73,7 +76,7 @@ function IncomeForm({ setIncome, initialValue = "" }) {
           type="submit"
           className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition duration-200 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-white dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 dark:focus:ring-slate-500 dark:focus:ring-offset-[#111827]"
         >
-          Continue
+          {submitLabel}
         </button>
       </form>
     </section>
