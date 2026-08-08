@@ -1,24 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BrandLogo from "./components/BrandLogo";
 import Dashboard from "./components/Dashboard";
 import IncomeForm from "./components/IncomeForm";
 import { useLocalStorage } from "./hooks/useLocalStorage";
-import { getCurrentDateDetails } from "./utils/dateUtils";
-
-const monthNames = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+import {
+  DEFAULT_BUDGET_SETTINGS,
+  createCycleMetadata,
+  createCycleRolloverPlan,
+  createSalaryDayChangePlan,
+  normalizeBudgetSettings,
+  normalizeLegacyIncomeEvents,
+} from "./utils/cycleManager";
+import {
+  getCycleDetailsFromMetadata,
+  getDaysInMonth,
+  getLocalDateKey,
+  getSalaryCycleDetails,
+  sanitizeSalaryDay,
+} from "./utils/dateUtils";
 
 const formatCurrency = (value) => {
   const amount = Number(value) || 0;
@@ -29,168 +28,412 @@ const formatCurrency = (value) => {
   })}`;
 };
 
+const readStoredJson = (key, fallback) => {
+  try {
+    const storedValue = localStorage.getItem(key);
+    return storedValue ? JSON.parse(storedValue) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const hasLegacyFinancialData = () => {
+  const savedIncome = Number(readStoredJson("income", 0)) || 0;
+  const savedOpeningBalance =
+    Number(readStoredJson("openingBalance", 0)) || 0;
+  const savedExpenses = readStoredJson("expenses", []);
+  const savedIncomeEvents = readStoredJson("incomeEvents", []);
+  const savedArchives = readStoredJson("archivedMonths", []);
+
+  return Boolean(
+    savedIncome ||
+      savedOpeningBalance ||
+      savedExpenses.length ||
+      savedIncomeEvents.length ||
+      savedArchives.length
+  );
+};
+
+const getInitialBudgetSettings = () => ({
+  ...DEFAULT_BUDGET_SETTINGS,
+  isSetupComplete: hasLegacyFinancialData(),
+});
+
+const getInitialArchivedCycles = () => {
+  const legacyArchives = readStoredJson("archivedMonths", []);
+
+  return legacyArchives.map((archive, index) => {
+    if (archive.cycleStart && archive.cycleEnd) return archive;
+
+    const year = Number(archive.year);
+    const month = Number(archive.month);
+
+    if (!Number.isInteger(year) || !Number.isInteger(month)) {
+      return {
+        ...archive,
+        cycleId: archive.cycleId || `legacy-${index}`,
+      };
+    }
+
+    const cycleStart = getLocalDateKey(new Date(year, month, 1));
+    const cycleEnd = getLocalDateKey(
+      new Date(year, month, getDaysInMonth(year, month))
+    );
+
+    return {
+      ...archive,
+      version: 2,
+      cycleId: cycleStart,
+      cycleStart,
+      cycleEnd,
+      salaryDay: 1,
+    };
+  });
+};
+
 function App() {
   const [income, setIncome] = useLocalStorage("income", 0);
   const [incomeEvents, setIncomeEvents] = useLocalStorage("incomeEvents", []);
-  const [openingBalance, setOpeningBalance] = useLocalStorage("openingBalance", 0);
+  const [openingBalance, setOpeningBalance] = useLocalStorage(
+    "openingBalance",
+    0
+  );
   const [expenses, setExpenses] = useLocalStorage("expenses", []);
-  const [, setMonthMetadata] = useLocalStorage("monthMetadata", null);
-  const [, setArchivedMonths] = useLocalStorage("archivedMonths", []);
-
-  const [showMonthChangePrompt, setShowMonthChangePrompt] = useState(false);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [isEditingIncome, setIsEditingIncome] = useState(false);
-  const [incomeMode, setIncomeMode] = useState("replace");
-  const [resetVersion, setResetVersion] = useState(0);
+  const [budgetSettings, setBudgetSettings] = useLocalStorage(
+    "budgetSettings:v2",
+    getInitialBudgetSettings
+  );
+  const [cycleMetadata, setCycleMetadata] = useLocalStorage(
+    "cycleMetadata:v2",
+    null
+  );
+  const [archivedCycles, setArchivedCycles] = useLocalStorage(
+    "archivedCycles:v2",
+    getInitialArchivedCycles
+  );
   const [isDarkMode, setIsDarkMode] = useLocalStorage("darkMode", true);
+
+  const [showCycleChangePrompt, setShowCycleChangePrompt] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showIncomeForm, setShowIncomeForm] = useState(false);
+  const [incomeMode, setIncomeMode] = useState("add");
+  const [resetVersion, setResetVersion] = useState(0);
+  const [todayKey, setTodayKey] = useState(() =>
+    getLocalDateKey(new Date())
+  );
+  const initializationStartedRef = useRef(false);
+  const rolloverCycleIdRef = useRef(null);
+  const resetDialogRef = useRef(null);
+  const cycleDialogRef = useRef(null);
+  const dialogOpenerRef = useRef(null);
+
+  const settings = normalizeBudgetSettings(budgetSettings);
+  const fallbackCycle = getSalaryCycleDetails(
+    todayKey,
+    cycleMetadata?.salaryDay || settings.salaryDay
+  );
+  const activeCycle =
+    getCycleDetailsFromMetadata(cycleMetadata, todayKey) || fallbackCycle;
+  const isSetupComplete = settings.isSetupComplete;
+  const activeFormMode = isSetupComplete ? incomeMode : "setup";
+  const shouldShowIncomeForm = !isSetupComplete || showIncomeForm;
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDarkMode);
   }, [isDarkMode]);
 
-  const { year, month, day, daysInMonth } = getCurrentDateDetails();
-  const monthName = monthNames[month];
-
   useEffect(() => {
-    let promptTimerId;
-    const savedMeta = localStorage.getItem("monthMetadata");
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
+    let midnightTimerId;
 
-    if (savedMeta) {
-      try {
-        const parsedMeta = JSON.parse(savedMeta);
+    const refreshToday = () => {
+      const nextTodayKey = getLocalDateKey(new Date());
+      setTodayKey((currentKey) =>
+        currentKey === nextTodayKey ? currentKey : nextTodayKey
+      );
+    };
 
-        if (parsedMeta.month !== currentMonth || parsedMeta.year !== currentYear) {
-          const savedExpenses = JSON.parse(localStorage.getItem("expenses") || "[]");
-          const savedIncomeEvents = JSON.parse(localStorage.getItem("incomeEvents") || "[]");
-          const savedIncome = Number(JSON.parse(localStorage.getItem("income") || "0"));
-          const savedOpeningBalance = Number(JSON.parse(localStorage.getItem("openingBalance") || "0"));
-          const totalSpent = savedExpenses
-            .filter((item) => !item.type || item.type === "expense")
-            .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-          const totalFixedExpenses = savedExpenses
-            .filter((item) => item.type === "fixedExpense")
-            .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-          const totalExpenses = totalSpent + totalFixedExpenses;
-          const totalSideIncome = savedExpenses
-            .filter((item) => item.type === "income")
-            .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-          const remainingBalance = savedOpeningBalance + savedIncome + totalSideIncome - totalExpenses;
-          const archiveEntry = {
-            month: parsedMeta.month,
-            year: parsedMeta.year,
-            openingBalance: savedOpeningBalance,
-            income: savedIncome,
-            totalSpent,
-            totalFixedExpenses,
-            totalExpenses,
-            totalSideIncome,
-            remainingBalance,
-            expenses: savedExpenses,
-            incomeEvents: savedIncomeEvents,
-            archivedAt: new Date().toISOString(),
-          };
-          const savedArchives = JSON.parse(localStorage.getItem("archivedMonths") || "[]");
-          const nextArchives = [...savedArchives, archiveEntry];
-          const newMeta = { month: currentMonth, year: currentYear };
+    const scheduleMidnightRefresh = () => {
+      const now = new Date();
+      const nextMidnight = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+        0,
+        0,
+        1
+      );
 
-          localStorage.setItem("archivedMonths", JSON.stringify(nextArchives));
-          localStorage.setItem("expenses", JSON.stringify([]));
-          localStorage.setItem("incomeEvents", JSON.stringify([]));
-          localStorage.setItem("openingBalance", JSON.stringify(remainingBalance));
-          localStorage.setItem("income", JSON.stringify(0));
-          localStorage.setItem("monthMetadata", JSON.stringify(newMeta));
+      window.clearTimeout(midnightTimerId);
+      midnightTimerId = window.setTimeout(() => {
+        refreshToday();
+        scheduleMidnightRefresh();
+      }, nextMidnight.getTime() - now.getTime());
+    };
 
-          setArchivedMonths(nextArchives);
-          setExpenses([]);
-          setIncomeEvents([]);
-          setOpeningBalance(remainingBalance);
-          setIncome(0);
-          setMonthMetadata(newMeta);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshToday();
+    };
 
-          promptTimerId = window.setTimeout(() => {
-            setShowMonthChangePrompt(true);
-          }, 0);
-        }
-      } catch (error) {
-        console.error("Error during month change transition:", error);
-      }
-    } else {
-      const newMeta = { month: currentMonth, year: currentYear };
-      localStorage.setItem("monthMetadata", JSON.stringify(newMeta));
-      setMonthMetadata(newMeta);
-    }
+    window.addEventListener("focus", refreshToday);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    scheduleMidnightRefresh();
 
     return () => {
-      if (promptTimerId) {
-        window.clearTimeout(promptTimerId);
+      window.clearTimeout(midnightTimerId);
+      window.removeEventListener("focus", refreshToday);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (cycleMetadata || initializationStartedRef.current) return;
+
+    initializationStartedRef.current = true;
+    const initialSettings = normalizeBudgetSettings(settings);
+    const legacyMonthMetadata = readStoredJson("monthMetadata", null);
+    const legacyMonth = Number(legacyMonthMetadata?.month);
+    const hasLegacyCycle =
+      initialSettings.isSetupComplete &&
+      Number.isInteger(Number(legacyMonthMetadata?.year)) &&
+      Number.isInteger(legacyMonth) &&
+      legacyMonth >= 0 &&
+      legacyMonth <= 11;
+    const cycleReferenceDate = hasLegacyCycle
+      ? new Date(
+          Number(legacyMonthMetadata.year),
+          legacyMonth,
+          1
+        )
+      : todayKey;
+    const initialCycle = getSalaryCycleDetails(
+      cycleReferenceDate,
+      initialSettings.salaryDay
+    );
+    const migratedIncomeEvents = normalizeLegacyIncomeEvents({
+      income,
+      incomeEvents,
+      cycle: initialCycle,
+    });
+
+    setCycleMetadata(createCycleMetadata(initialCycle));
+    setIncomeEvents(migratedIncomeEvents);
+    setBudgetSettings({
+      ...initialSettings,
+      isSetupComplete:
+        initialSettings.isSetupComplete || hasLegacyFinancialData(),
+    });
+    setArchivedCycles((currentArchives) => currentArchives);
+  }, [
+    archivedCycles,
+    cycleMetadata,
+    income,
+    incomeEvents,
+    setArchivedCycles,
+    setBudgetSettings,
+    setCycleMetadata,
+    setIncomeEvents,
+    settings,
+    todayKey,
+  ]);
+
+  useEffect(() => {
+    if (!cycleMetadata) return;
+
+    const rolloverPlan = createCycleRolloverPlan({
+      referenceDate: todayKey,
+      metadata: cycleMetadata,
+      settings,
+      income,
+      openingBalance,
+      expenses,
+      incomeEvents,
+      archivedCycles,
+    });
+
+    if (
+      !rolloverPlan ||
+      rolloverCycleIdRef.current === cycleMetadata.cycleId
+    ) {
+      return;
+    }
+
+    rolloverCycleIdRef.current = cycleMetadata.cycleId;
+    setArchivedCycles(rolloverPlan.archivedCycles);
+    setOpeningBalance(rolloverPlan.openingBalance);
+    setIncome(rolloverPlan.income);
+    setExpenses(rolloverPlan.expenses);
+    setIncomeEvents(rolloverPlan.incomeEvents);
+    setCycleMetadata(rolloverPlan.cycleMetadata);
+    setBudgetSettings(rolloverPlan.budgetSettings);
+    setShowIncomeForm(false);
+    dialogOpenerRef.current = document.activeElement;
+    setShowCycleChangePrompt(true);
+  }, [
+    archivedCycles,
+    cycleMetadata,
+    expenses,
+    income,
+    incomeEvents,
+    openingBalance,
+    setArchivedCycles,
+    setBudgetSettings,
+    setCycleMetadata,
+    setExpenses,
+    setIncome,
+    setIncomeEvents,
+    setOpeningBalance,
+    settings,
+    todayKey,
+  ]);
+
+  useEffect(() => {
+    if (!showResetConfirm && !showCycleChangePrompt) return undefined;
+
+    const dialog = showResetConfirm
+      ? resetDialogRef.current
+      : cycleDialogRef.current;
+    const focusableElements = dialog
+      ? [...dialog.querySelectorAll("button, input, select, textarea, [tabindex]:not([tabindex='-1'])")]
+      : [];
+    const firstFocusable = focusableElements[0];
+    const lastFocusable = focusableElements[focusableElements.length - 1];
+
+    if (dialog && !dialog.contains(document.activeElement)) {
+      firstFocusable?.focus();
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        if (showResetConfirm) setShowResetConfirm(false);
+        else setShowCycleChangePrompt(false);
+        return;
+      }
+
+      if (event.key !== "Tab" || focusableElements.length === 0) return;
+
+      if (event.shiftKey && document.activeElement === firstFocusable) {
+        event.preventDefault();
+        lastFocusable.focus();
+      } else if (!event.shiftKey && document.activeElement === lastFocusable) {
+        event.preventDefault();
+        firstFocusable.focus();
       }
     };
-  }, [setArchivedMonths, setExpenses, setIncome, setIncomeEvents, setMonthMetadata, setOpeningBalance]);
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      if (dialogOpenerRef.current?.isConnected) {
+        dialogOpenerRef.current.focus();
+      }
+    };
+  }, [showCycleChangePrompt, showResetConfirm]);
 
   const handleAddExpense = (newExpense) => {
-    setExpenses([...expenses, newExpense]);
+    setExpenses((currentExpenses) => [...currentExpenses, newExpense]);
   };
 
   const handleDeleteExpense = (id) => {
-    setExpenses(expenses.filter((expense) => expense.id !== id));
+    setExpenses((currentExpenses) =>
+      currentExpenses.filter((expense) => expense.id !== id)
+    );
   };
 
-  const handleIncomeSubmit = (newIncome) => {
-    if (incomeMode === "add") {
-      const incomeAmount = Number(newIncome) || 0;
+  const handleDeleteIncomeEvent = (id) => {
+    const eventToDelete = incomeEvents.find((event) => event.id === id);
+    if (!eventToDelete) return;
 
-      setIncome((Number(income) || 0) + incomeAmount);
-      setIncomeEvents([
-        ...incomeEvents,
-        {
-          id: Date.now(),
-          amount: incomeAmount,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+    setIncomeEvents((currentEvents) =>
+      currentEvents.filter((event) => event.id !== id)
+    );
+    setIncome((currentIncome) =>
+      Math.max(
+        0,
+        (Number(currentIncome) || 0) - (Number(eventToDelete.amount) || 0)
+      )
+    );
+  };
+
+  const saveSalaryDaySetting = (salaryDay) => {
+    const changePlan = createSalaryDayChangePlan({
+      referenceDate: todayKey,
+      metadata: cycleMetadata || createCycleMetadata(activeCycle),
+      settings,
+      selectedSalaryDay: salaryDay,
+    });
+
+    if (!changePlan) return;
+
+    setCycleMetadata(changePlan.cycleMetadata);
+    setBudgetSettings(changePlan.budgetSettings);
+  };
+
+  const handleIncomeSubmit = ({ amount, receivedOn, salaryDay }) => {
+    if (activeFormMode === "settings") {
+      saveSalaryDaySetting(salaryDay);
     } else {
-      setIncome(newIncome);
-      setIncomeEvents([]);
+      const salaryEvent = {
+        id: Date.now(),
+        amount: Number(amount) || 0,
+        type: "salary",
+        receivedOn,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (activeFormMode === "setup") {
+        const selectedSalaryDay = sanitizeSalaryDay(salaryDay);
+        const setupCycle = getSalaryCycleDetails(todayKey, selectedSalaryDay);
+
+        setIncome(Number(amount) || 0);
+        setIncomeEvents([salaryEvent]);
+        setCycleMetadata(createCycleMetadata(setupCycle));
+        setBudgetSettings({
+          ...settings,
+          salaryDay: selectedSalaryDay,
+          pendingSalaryDay: null,
+          isSetupComplete: true,
+        });
+      } else {
+        setIncome(
+          (currentIncome) => (Number(currentIncome) || 0) + salaryEvent.amount
+        );
+        setIncomeEvents((currentEvents) => [
+          ...currentEvents,
+          salaryEvent,
+        ]);
+      }
     }
 
-    setIsEditingIncome(false);
-    setIncomeMode("replace");
-  };
-
-  const handleContinueWithCarryForward = () => {
-    setShowMonthChangePrompt(false);
+    setShowIncomeForm(false);
+    setIncomeMode("add");
   };
 
   const openIncomeForm = (mode) => {
     setIncomeMode(mode);
-    setShowMonthChangePrompt(false);
-    setIsEditingIncome(true);
-  };
-
-  const handleAddSalary = () => {
-    openIncomeForm("add");
+    setShowCycleChangePrompt(false);
+    setShowIncomeForm(true);
   };
 
   const handleResetAllData = () => {
-    const newMeta = { month, year };
+    const defaultCycle = getSalaryCycleDetails(todayKey, 1);
 
     setIncome(0);
     setOpeningBalance(0);
     setExpenses([]);
     setIncomeEvents([]);
-    setMonthMetadata(newMeta);
-    setArchivedMonths([]);
-    setIsEditingIncome(false);
-    setIncomeMode("replace");
-    setShowMonthChangePrompt(false);
+    setBudgetSettings(DEFAULT_BUDGET_SETTINGS);
+    setCycleMetadata(createCycleMetadata(defaultCycle));
+    setArchivedCycles([]);
+    setShowIncomeForm(false);
+    setIncomeMode("add");
+    setShowCycleChangePrompt(false);
     setShowResetConfirm(false);
     setResetVersion((version) => version + 1);
-  };
+    rolloverCycleIdRef.current = null;
 
-  const hasMonthlyFunds = Number(income || 0) !== 0 || Number(openingBalance || 0) !== 0;
+    localStorage.removeItem("monthMetadata");
+    localStorage.removeItem("archivedMonths");
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950 transition-colors duration-200 dark:bg-[#0B1220] dark:text-[#F9FAFB]">
@@ -211,7 +454,10 @@ function App() {
           <div className="flex flex-shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowResetConfirm(true)}
+              onClick={(event) => {
+                dialogOpenerRef.current = event.currentTarget;
+                setShowResetConfirm(true);
+              }}
               className="inline-flex h-10 items-center gap-2 rounded-full border border-red-200 bg-white px-2.5 text-sm font-semibold text-red-600 shadow-sm transition duration-200 hover:border-red-300 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2 focus:ring-offset-slate-50 dark:border-red-900/50 dark:bg-[#111827] dark:text-red-300 dark:hover:border-red-800 dark:hover:bg-red-950/30 dark:focus:ring-red-900/60 dark:focus:ring-offset-[#0B1220]"
               aria-label="Reset all spending data"
             >
@@ -225,7 +471,7 @@ function App() {
 
             <button
               type="button"
-              onClick={() => setIsDarkMode(!isDarkMode)}
+              onClick={() => setIsDarkMode((currentMode) => !currentMode)}
               className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 text-sm font-semibold text-slate-700 shadow-sm transition duration-200 hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 dark:border-[#1F2937] dark:bg-[#111827] dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:focus:ring-slate-500 dark:focus:ring-offset-[#0B1220]"
               aria-label={`Switch to ${isDarkMode ? "light" : "dark"} mode`}
               aria-pressed={isDarkMode}
@@ -237,7 +483,7 @@ function App() {
                   </svg>
                 ) : (
                   <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
-                    <path d="M12 17.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11ZM12 2a.75.75 0 0 1 .75.75v1a.75.75 0 0 1-1.5 0v-1A.75.75 0 0 1 12 2ZM12 20.25a.75.75 0 0 1 .75.75v.25a.75.75 0 0 1-1.5 0V21a.75.75 0 0 1 .75-.75ZM21.25 12a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1 0-1.5h.75a.75.75 0 0 1 .75.75ZM4.25 12a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1 0-1.5h.75a.75.75 0 0 1 .75.75Z" />
+                    <path d="M12 17.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11ZM12 2a.75.75 0 0 1 .75.75v1a.75.75 0 0 1-1.5 0v-1A.75.75 0 0 1 12 2ZM12 20.25a.75.75 0 0 1 .75.75v.25a.75.75 0 0 1-1.5 0V21a.75.75 0 0 1 .75-.75ZM21.25 12a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1 0-1.5h.75a.75.75 0 0 1 .75.75ZM4.25 12a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1 0-1.5h.75a.75.75 0 0 1 .75-.75Z" />
                   </svg>
                 )}
               </span>
@@ -247,15 +493,15 @@ function App() {
         </header>
 
         <main className="flex-1">
-          {!hasMonthlyFunds || isEditingIncome ? (
+          {shouldShowIncomeForm ? (
             <div className="page-enter">
-              {isEditingIncome && (
+              {isSetupComplete && (
                 <div className="mx-auto mb-4 flex max-w-md justify-end">
                   <button
                     type="button"
                     onClick={() => {
-                      setIsEditingIncome(false);
-                      setIncomeMode("replace");
+                      setShowIncomeForm(false);
+                      setIncomeMode("add");
                     }}
                     className="rounded-full px-3 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:text-[#94A3B8] dark:hover:text-white"
                   >
@@ -264,11 +510,19 @@ function App() {
                 </div>
               )}
               <IncomeForm
-                key={`${resetVersion}-${incomeMode}`}
-                setIncome={handleIncomeSubmit}
-                initialValue={incomeMode === "add" ? "" : income > 0 ? income : ""}
-                mode={incomeMode}
-                submitLabel={incomeMode === "add" ? "Add income" : isEditingIncome ? "Save salary" : "Continue"}
+                key={`${resetVersion}-${activeFormMode}-${activeCycle.id}-${settings.pendingSalaryDay || "none"}`}
+                onSubmit={handleIncomeSubmit}
+                activeCycle={activeCycle}
+                initialValue={activeFormMode === "setup" && income > 0 ? income : ""}
+                initialSalaryDay={
+                  settings.pendingSalaryDay ||
+                  cycleMetadata?.salaryDay ||
+                  settings.salaryDay
+                }
+                initialReceivedOn={
+                  activeFormMode === "add" ? todayKey : activeCycle.startKey
+                }
+                mode={activeFormMode}
               />
             </div>
           ) : (
@@ -277,14 +531,13 @@ function App() {
               openingBalance={openingBalance}
               expenses={expenses}
               incomeEvents={incomeEvents}
-              currentDay={day}
-              daysInMonth={daysInMonth}
-              monthName={monthName}
-              year={year}
+              cycle={activeCycle}
+              pendingSalaryDay={settings.pendingSalaryDay}
               onAddExpense={handleAddExpense}
               onDeleteExpense={handleDeleteExpense}
-              onAddSalary={handleAddSalary}
-              onEditIncome={() => openIncomeForm("replace")}
+              onDeleteIncomeEvent={handleDeleteIncomeEvent}
+              onRecordSalary={() => openIncomeForm("add")}
+              onOpenSettings={() => openIncomeForm("settings")}
             />
           )}
         </main>
@@ -292,18 +545,25 @@ function App() {
 
       {showResetConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="page-enter w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-[#1F2937] dark:bg-[#111827] sm:p-7">
+          <div
+            ref={resetDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-dialog-title"
+            className="page-enter w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-[#1F2937] dark:bg-[#111827] sm:p-7"
+          >
             <div className="mb-5 grid h-11 w-11 place-items-center rounded-xl border border-red-200 bg-red-50 text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4M12 17h.01M10.3 4.6 2.9 17.4A2 2 0 0 0 4.6 20h14.8a2 2 0 0 0 1.7-2.6L13.7 4.6a2 2 0 0 0-3.4 0Z" />
               </svg>
             </div>
 
-            <h2 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
+            <h2 id="reset-dialog-title" className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
               Reset all data?
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-              This clears your salary, opening balance, transactions, and archived months. This action cannot be undone.
+              This clears your salary, salary-day setting, opening balance,
+              transactions, and archived cycles. This action cannot be undone.
             </p>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -316,6 +576,7 @@ function App() {
               </button>
               <button
                 type="button"
+                autoFocus
                 onClick={() => setShowResetConfirm(false)}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-[#1F2937] dark:bg-[#111827] dark:text-slate-200 dark:hover:bg-slate-800"
               >
@@ -326,20 +587,28 @@ function App() {
         </div>
       )}
 
-      {showMonthChangePrompt && (
+      {showCycleChangePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="page-enter w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-[#1F2937] dark:bg-[#111827] sm:p-7">
+          <div
+            ref={cycleDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cycle-dialog-title"
+            className="page-enter w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-[#1F2937] dark:bg-[#111827] sm:p-7"
+          >
             <div className="mb-5 grid h-11 w-11 place-items-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4M16 2v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
               </svg>
             </div>
 
-            <h2 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
-              Welcome to {monthName}
+            <h2 id="cycle-dialog-title" className="text-xl font-semibold tracking-tight text-slate-950 dark:text-white">
+              New salary cycle
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-              Your previous month's remaining balance was carried forward. Add income now if you received it, or continue and add it later.
+              {activeCycle.label} has started. Your previous remaining balance was
+              carried forward. Record salary now if you received it, or continue
+              and add it later.
             </p>
 
             <div className="my-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-[#1F2937] dark:bg-slate-900/60">
@@ -354,14 +623,15 @@ function App() {
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={handleAddSalary}
+                autoFocus
+                onClick={() => openIncomeForm("add")}
                 className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
               >
-                Add income
+                Record salary
               </button>
               <button
                 type="button"
-                onClick={handleContinueWithCarryForward}
+                onClick={() => setShowCycleChangePrompt(false)}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-[#1F2937] dark:bg-[#111827] dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 Continue

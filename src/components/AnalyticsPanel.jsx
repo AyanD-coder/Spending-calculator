@@ -1,4 +1,5 @@
 import { calculateAnalyticsMetrics } from "../utils/budgetCalculator";
+import { formatDateKey } from "../utils/dateUtils";
 
 const formatCurrency = (value) => {
   const amount = Number(value) || 0;
@@ -22,12 +23,12 @@ const categoryColors = [
   "#94A3B8",
 ];
 
-function getBudgetHealth(metrics, projectedMonthlySpend) {
+function getBudgetHealth(metrics, projectedCycleSpend) {
   const projectedLimit = metrics.totalAvailableFunds;
 
   if (metrics.remainingBalance < 0) {
     return {
-      title: "Over monthly budget",
+      title: "Over cycle budget",
       detail: `${formatCurrency(Math.abs(metrics.remainingBalance))} beyond your available balance.`,
       tone: "danger",
     };
@@ -41,10 +42,10 @@ function getBudgetHealth(metrics, projectedMonthlySpend) {
     };
   }
 
-  if (projectedMonthlySpend > projectedLimit) {
+  if (projectedCycleSpend > projectedLimit) {
     return {
       title: "Projection needs attention",
-      detail: `${formatCurrency(projectedMonthlySpend - projectedLimit)} above current monthly funds.`,
+      detail: `${formatCurrency(projectedCycleSpend - projectedLimit)} above current cycle funds.`,
       tone: "warning",
     };
   }
@@ -59,7 +60,7 @@ function getBudgetHealth(metrics, projectedMonthlySpend) {
 
   return {
     title: "On track",
-    detail: `${formatCurrency(metrics.remainingBalance)} remaining for the month.`,
+    detail: `${formatCurrency(metrics.remainingBalance)} remaining for this cycle.`,
     tone: "success",
   };
 }
@@ -199,7 +200,7 @@ function SpendingTrendChart({ dailySpending, currentDay, hasExpenses }) {
               className="text-white dark:text-[#111827]"
             >
               <title>
-                Day {visibleDays[index].day}: {formatCurrency(visibleDays[index].amount)}
+                Day {visibleDays[index].day} ({formatDateKey(visibleDays[index].dateKey, false)}): {formatCurrency(visibleDays[index].amount)}
               </title>
             </circle>
           )
@@ -215,12 +216,15 @@ function SpendingTrendChart({ dailySpending, currentDay, hasExpenses }) {
   );
 }
 
-function MonthlyPaceChart({ dailySpending, totalFunds, hasExpenses }) {
+function CyclePaceChart({ dailySpending, dailyBudgets = [], totalFunds, hasExpenses }) {
   const cumulativeSpend = dailySpending.reduce((totals, item) => {
     const previousTotal = totals[totals.length - 1] || 0;
     return [...totals, previousTotal + Number(item.amount || 0)];
   }, []);
-  const budgetPace = dailySpending.map((item) => (Number(totalFunds || 0) / dailySpending.length) * item.day);
+  const budgetPace = dailyBudgets.reduce((totals, dailyBudget) => {
+    const previousTotal = totals[totals.length - 1] || 0;
+    return [...totals, previousTotal + Number(dailyBudget || 0)];
+  }, []);
   const maxValue = Math.max(1, Number(totalFunds || 0), ...cumulativeSpend, ...budgetPace);
   const spendPath = createLinePath(buildPoints(cumulativeSpend, maxValue));
   const budgetPath = createLinePath(buildPoints(budgetPace, maxValue));
@@ -229,8 +233,8 @@ function MonthlyPaceChart({ dailySpending, totalFunds, hasExpenses }) {
   if (!hasExpenses) {
     return (
       <EmptyState
-        title="Monthly pace is empty"
-        description="After you add expenses, this chart compares actual spending with your budget pace."
+        title="Cycle pace is empty"
+        description="After you add expenses, this chart compares actual spending with your salary-cycle pace."
       />
     );
   }
@@ -247,7 +251,7 @@ function MonthlyPaceChart({ dailySpending, totalFunds, hasExpenses }) {
           Budget pace {formatCurrency(totalFunds)}
         </span>
       </div>
-      <svg viewBox="0 0 640 240" role="img" aria-label="Monthly spending compared with budget pace" className="h-[260px] w-full">
+      <svg viewBox="0 0 640 240" role="img" aria-label="Salary-cycle spending compared with budget pace" className="h-[260px] w-full">
         {[0.25, 0.5, 0.75, 1].map((line) => {
           const y = 18 + (1 - line) * 192;
 
@@ -270,7 +274,7 @@ function MonthlyPaceChart({ dailySpending, totalFunds, hasExpenses }) {
           Day 1
         </text>
         <text x="570" y="228" className="fill-slate-400 text-[11px] font-semibold dark:fill-slate-500">
-          Month end
+          Cycle end
         </text>
       </svg>
     </div>
@@ -325,12 +329,12 @@ function CategoryBreakdown({ items, totalSpent }) {
   );
 }
 
-function AnalyticsPanel({ expenses, currentDay, daysInMonth, metrics }) {
-  const analytics = calculateAnalyticsMetrics(expenses, currentDay, daysInMonth);
+function AnalyticsPanel({ expenses, cycle, metrics }) {
+  const analytics = calculateAnalyticsMetrics({ expenses, cycle });
   const hasExpenses = analytics.totalSpent > 0;
   const totalFunds = metrics.totalAvailableFunds;
-  const health = getBudgetHealth(metrics, analytics.projectedMonthlySpend);
-  const projectedTone = analytics.projectedMonthlySpend > totalFunds ? "danger" : "success";
+  const health = getBudgetHealth(metrics, analytics.projectedCycleSpend);
+  const projectedTone = analytics.projectedCycleSpend > totalFunds ? "danger" : "success";
   const highestTone = analytics.highestSpendingDay.amount > metrics.baseDailyBudget ? "warning" : "neutral";
   const healthToneClasses = {
     success: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300",
@@ -347,8 +351,8 @@ function AnalyticsPanel({ expenses, currentDay, daysInMonth, metrics }) {
           caption={`${analytics.activeSpendingDays} active spending day${analytics.activeSpendingDays === 1 ? "" : "s"}`}
         />
         <MetricCard
-          label="Projected month"
-          value={formatCurrency(analytics.projectedMonthlySpend)}
+          label="Projected cycle"
+          value={formatCurrency(analytics.projectedCycleSpend)}
           caption="Based on elapsed days"
           tone={projectedTone}
         />
@@ -393,22 +397,23 @@ function AnalyticsPanel({ expenses, currentDay, daysInMonth, metrics }) {
         >
           <SpendingTrendChart
             dailySpending={analytics.dailySpending}
-            currentDay={currentDay}
+            currentDay={cycle.currentDay}
             hasExpenses={hasExpenses}
           />
         </ChartFrame>
 
         <ChartFrame
           eyebrow="Overview"
-          title="Monthly pace"
+          title="Cycle pace"
           action={
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500 dark:border-[#1F2937] dark:bg-slate-900/70 dark:text-[#94A3B8]">
-              {daysInMonth} days
+              {cycle.totalDays} days
             </span>
           }
         >
-          <MonthlyPaceChart
+          <CyclePaceChart
             dailySpending={analytics.dailySpending}
+            dailyBudgets={metrics.dailyBudgetTotals}
             totalFunds={totalFunds}
             hasExpenses={hasExpenses}
           />

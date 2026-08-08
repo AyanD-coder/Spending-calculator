@@ -75,6 +75,7 @@ function ExpenseForm({ onAddExpense }) {
             <button
               key={option.id}
               type="button"
+              aria-pressed={selected}
               onClick={() => {
                 setType(option.id);
                 if (option.id === "fixedExpense") {

@@ -1,5 +1,5 @@
 import { getExpenseCategory } from "../utils/budgetCalculator";
-import { formatExpenseDate } from "../utils/dateUtils";
+import { formatExpenseDate, parseLocalDateKey } from "../utils/dateUtils";
 
 const formatCurrency = (value) => {
   const amount = Number(value) || 0;
@@ -9,9 +9,31 @@ const formatCurrency = (value) => {
   })}`;
 };
 
-function ExpenseHistory({ expenses, onDeleteExpense }) {
-  const sortedExpenses = [...expenses].sort(
-    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+const getSortTime = (item) => {
+  if (item.receivedOn) {
+    return parseLocalDateKey(item.receivedOn)?.getTime() || 0;
+  }
+
+  return new Date(item.createdAt).getTime() || 0;
+};
+
+function ExpenseHistory({
+  expenses,
+  incomeEvents = [],
+  onDeleteExpense,
+  onDeleteIncomeEvent,
+}) {
+  const transactions = [
+    ...expenses.map((expense) => ({ ...expense, source: "transaction" })),
+    ...incomeEvents.map((event) => ({
+      ...event,
+      type: "salary",
+      description: "Salary received",
+      source: "salary",
+    })),
+  ];
+  const sortedExpenses = transactions.toSorted(
+    (a, b) => getSortTime(b) - getSortTime(a)
   );
 
   return (
@@ -22,11 +44,11 @@ function ExpenseHistory({ expenses, onDeleteExpense }) {
             Activity
           </p>
           <h3 className="mt-2 text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
-            Transaction history
+            Current-cycle history
           </h3>
         </div>
         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-[#1F2937] dark:bg-slate-900/70 dark:text-[#94A3B8]">
-          {expenses.length}
+          {transactions.length}
         </span>
       </div>
 
@@ -42,7 +64,7 @@ function ExpenseHistory({ expenses, onDeleteExpense }) {
               No transactions yet
             </p>
             <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-[#94A3B8]">
-              Add your first expense to start tracking this month.
+              Record salary or add a transaction to start tracking this cycle.
             </p>
           </div>
         </div>
@@ -50,12 +72,16 @@ function ExpenseHistory({ expenses, onDeleteExpense }) {
         <div className="max-h-[424px] overflow-y-auto pr-1">
           <div className="divide-y divide-slate-100 dark:divide-[#1F2937]">
             {sortedExpenses.map((expense) => {
-              const isIncome = expense.type === "income";
+              const isSalary = expense.type === "salary";
+              const isIncome = isSalary || expense.type === "income";
               const isFixedExpense = expense.type === "fixedExpense";
               const category = isFixedExpense ? expense.category || "Major" : getExpenseCategory(expense);
+              const deleteTransaction = isSalary
+                ? onDeleteIncomeEvent
+                : onDeleteExpense;
 
               return (
-                <article key={expense.id} className="group flex items-center gap-4 py-3.5">
+                <article key={`${expense.source}-${expense.id}`} className="group flex items-center gap-4 py-3.5">
                   <div className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl ${
                     isIncome
                       ? "bg-emerald-50 text-[#16A34A] dark:bg-emerald-950/30 dark:text-[#22C55E]"
@@ -90,7 +116,7 @@ function ExpenseHistory({ expenses, onDeleteExpense }) {
                       )}
                     </div>
                     <p className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-[#94A3B8]">
-                      {formatExpenseDate(expense.createdAt)}
+                      {formatExpenseDate(expense.receivedOn || expense.createdAt)}
                       {!isIncome ? ` / ${isFixedExpense ? "Major" : category}` : ""}
                     </p>
                   </div>
@@ -106,13 +132,13 @@ function ExpenseHistory({ expenses, onDeleteExpense }) {
                       {isIncome ? "+" : "-"}
                       {formatCurrency(expense.amount)}
                     </p>
-                    {onDeleteExpense && (
+                    {deleteTransaction && (
                       <button
                         type="button"
-                        onClick={() => onDeleteExpense(expense.id)}
+                        onClick={() => deleteTransaction(expense.id)}
                         className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 opacity-100 transition duration-200 hover:bg-red-50 hover:text-[#EF4444] focus:outline-none focus:ring-2 focus:ring-red-200 dark:text-slate-600 dark:hover:bg-red-950/30 dark:hover:text-[#EF4444] dark:focus:ring-red-900/50 sm:opacity-0 sm:group-hover:opacity-100"
-                        aria-label={`Delete ${expense.description || "transaction"}`}
-                        title="Delete transaction"
+                        aria-label={`Delete ${expense.description || (isSalary ? "salary" : "transaction")}`}
+                        title={isSalary ? "Delete salary" : "Delete transaction"}
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 6h14M9 6V4h6v2M8 10v8M16 10v8M7 6l1 14h8l1-14" />
